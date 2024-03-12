@@ -48,5 +48,3 @@ with open('face_encodings.csv', mode='a', newline='') as file:
             # Write face encodings to CSV
             for face_encoding in face_encodings:
                 writer.writerow([filename, *face_encoding])
-
-            # No need to display the image here
