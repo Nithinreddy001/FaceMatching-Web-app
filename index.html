@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        #content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .button {
+            display: block;
+            width: 100%;
+            padding: 10px 0;
+            margin: 10px 0;
+            font-size: 16px;
+            text-align: center;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .button:hover {
+            background-color: #0056b3;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        #response-container {
+            margin-bottom: 20px;
+        }
+
+        #response-container p {
+            text-align: center;
+            font-size: 18px;
+            color: #555;
+        }
+
+        .image-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .image-container img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .download-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 14px;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="content">
+        <h1>Take a Selfie and Upload</h1>
+        <!-- Page 1: Button to take selfie -->
+        <button id="take-selfie-btn" class="button" onclick="redirectToPage2()">Take Selfie</button>
+
+        <!-- Page 2: Display live webcam and button to capture -->
+        <div id="page-2" style="display: none;">
+            <h2>Take Your Selfie</h2>
+            <video id="video" autoplay></video>
+            <button id="capture-btn" class="button" onclick="captureImage()">Capture</button>
+        </div>
+
+        <!-- Page 3: Display matched images -->
+        <div id="page-3" style="display: none;">
+            <h2>Matching Images</h2>
+            <div id="response-container"></div>
+            <button class="button" onclick="retry()">Retry</button>
+        </div>
+
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const takeSelfieBtn = document.getElementById('take-selfie-btn');
+        let isImageCaptured = false;
+
+        let matchedImages = []; // Array to store matched images
+
+        // Function to redirect to Page 2
+        function redirectToPage2() {
+            takeSelfieBtn.style.display = 'none';
+            document.getElementById('page-2').style.display = 'block';
+            // Access the device camera
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    video.srcObject = stream;
+                })
+                .catch(function(error) {
+                    console.error('Error accessing the camera: ', error);
+                });
+        }
+
+        // Function to capture image
+        function captureImage() {
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+            canvas.style.display = 'block';
+            video.style.display = 'none';
+            video.srcObject.getTracks().forEach(track => track.stop()); // Stop webcam
+            document.getElementById('page-3').style.display = 'block';
+            document.getElementById('page-2').style.display = 'none';
+            fetchAndDisplayMatchingImages(); // Call API and display matching images
+            isImageCaptured = true;
+        }
+
+        // Function to fetch and display matching images
+        function fetchAndDisplayMatchingImages() {
+            canvas.toBlob(function(blob) {
+                const formData = new FormData();
+                formData.append('file', blob, 'selfie.jpg'); // 'selfie.jpg' is the filename
+                fetch('http://localhost:5000/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Upload successful:', data);
+                    // Display response
+                    const responseContainer = document.getElementById('response-container');
+                    responseContainer.innerHTML = ''; // Clear previous content
+                    if (data.matched_images && data.matched_images.length > 0) {
+                        data.matched_images.forEach(function(imageUrl) {
+                            const container = document.createElement('div');
+                            container.classList.add('image-container');
+
+                            const img = document.createElement('img');
+                            img.src = imageUrl;
+
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = imageUrl;
+                            downloadLink.download = ''; // Enable download attribute
+                            downloadLink.innerText = "Download";
+                            downloadLink.classList.add('download-btn');
+
+                            container.appendChild(img);
+                            container.appendChild(downloadLink);
+
+                            responseContainer.appendChild(container);
+                        });
+                    } else {
+                        const message = document.createElement('p');
+                        message.textContent = "No matching photos found. Please try again.";
+                        responseContainer.appendChild(message);
+                    }
+                })
+                .catch(error => console.error('Error uploading image:', error));
+            }, 'image/jpeg');
+        }
+
+        // Function to retry
+        function retry() {
+            location.reload(true); // Perform hard reload
+        }
+    </script>
+</body>
+</html>
